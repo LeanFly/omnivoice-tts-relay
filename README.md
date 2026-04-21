@@ -13,6 +13,31 @@ Its main purpose is exactly this: convert MiMo TTS into a Legado-friendly TTS se
 - Supports optional speed style control via request params.
 - Supports session-based auth endpoints for clients that use a login flow.
 
+## Run
+
+Set required environment variables:
+
+- MIMO_API_KEY
+
+Optional auth variables (set all three to enable login/session auth):
+
+- TTS_AUTH_USERNAME
+- TTS_AUTH_PASSWORD
+- TTS_SESSION_SECRET
+
+Install dependencies and start service:
+
+```bash
+uv sync
+uv run uvicorn main:app --host 0.0.0.0 --port 8080
+```
+
+Quick local test:
+
+```bash
+uv run python test-client.py
+```
+
 ## Legado setup
 
 Use the following values in Legado TTS server settings.
