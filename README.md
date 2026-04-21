@@ -48,7 +48,7 @@ Protocol note:
 - If you need HTTPS, put it behind your own reverse proxy/TLS terminator (for example Nginx or Caddy).
 
 - url:
-	http://your-domain/tts?text={{speakText}}&lang=zh
+	`http://your-domain/tts?text={{speakText}}&lang=zh`
 - Content_Type:
 	audio/wav
 - concurrentRate:
