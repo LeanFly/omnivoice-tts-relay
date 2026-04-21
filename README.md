@@ -57,9 +57,18 @@ Protocol note:
 If auth is enabled in this relay, use login flow values below.
 
 - loginUrl:
-	http://your-domain/auth/login
+	http://your-domain/auth/login?redirect=/auth/check
+- loginCheckJs:
+	(result || "").indexOf("OK") > -1
 - header:
 	Leave empty when using login cookie session.
+
+Notes for loginCheckJs:
+
+- This relay returns `OK` on `/auth/check` when the session cookie is valid.
+- The `loginUrl` above redirects to `/auth/check` after successful login, so `result` should be the `/auth/check` response body.
+- The example checks whether response text contains `OK`.
+- If your Legado version uses a different variable name, keep the same logic: check whether the response content contains `OK`.
 
 Language and speed notes:
 
