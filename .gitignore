@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment configuration
+.env
+.env.*
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test / runtime artifacts
+result.wav
+test.wav
+result-*.wav
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
