@@ -13,6 +13,37 @@ Its main purpose is exactly this: convert MiMo TTS into a Legado-friendly TTS se
 - Supports optional speed style control via request params.
 - Supports session-based auth endpoints for clients that use a login flow.
 
+## Legado setup
+
+Use the following values in Legado TTS server settings.
+
+Protocol note:
+
+- This app serves plain HTTP by default.
+- If you need HTTPS, put it behind your own reverse proxy/TLS terminator (for example Nginx or Caddy).
+
+- url:
+	http://your-domain/tts?text={{speakText}}&lang=zh
+- Content_Type:
+	audio/wav
+- concurrentRate:
+	1
+
+If auth is enabled in this relay, use login flow values below.
+
+- loginUrl:
+	http://your-domain/auth/login
+- header:
+	Leave empty when using login cookie session.
+
+Language and speed notes:
+
+- lang=zh uses Chinese voice default_zh.
+- lang=en uses English voice default_en.
+- no lang uses mimo_default.
+- when speed is not provided: zh defaults to 变快, others default to Speed up.
+- you can override speed by passing speed in request params.
+
 ## License
 
 MIT
