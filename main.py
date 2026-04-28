@@ -139,7 +139,7 @@ def resolve_speed(lang: str, speed: str) -> str:
         normalized = speed.strip().lower()
         if is_chinese_lang(lang) and normalized in {"speed up", "speedup", "speed-up"}:
             return DEFAULT_ZH_SPEED
-        if is_english_lang(lang) and normalized in {DEFAULT_ZH_SPEED}:
+        if is_english_lang(lang) and normalized in {DEFAULT_ZH_SPEED, DEFAULT_ZH_SPEED.lower()}:
             return DEFAULT_EN_SPEED
         return speed.strip()
     # Use language-appropriate default style tags when not provided.
@@ -166,7 +166,8 @@ def parse_flag(value) -> bool:
 
 
 def resolve_model(data: dict) -> str:
-    if "v2" in data and parse_flag(data.get("v2")):
+    v2_value = data.get("v2")
+    if v2_value is not None and parse_flag(v2_value):
         return MODEL_V2
     return MODEL_V2_5
 
