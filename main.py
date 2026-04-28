@@ -28,6 +28,12 @@ VOICE_ALIASES = {
     "default": "mimo_default",
     "mimo_default": "mimo_default",
 }
+MODEL_V2_5 = "mimo-v2.5-tts"
+MODEL_V2 = "mimo-v2-tts"
+DEFAULT_ZH_SPEED = "变快"
+DEFAULT_EN_SPEED = "Speed up"
+CHINESE_LANGS = {"zh", "chinese", "default_zh", "mimo_zh", "zh-cn", "zh-hans", "zh-hant"}
+ENGLISH_LANGS = {"en", "english", "default_en", "mimo_en", "en-us", "en-gb"}
 
 
 def auth_enabled() -> bool:
@@ -113,14 +119,56 @@ def resolve_voice(lang: str) -> str:
     return VOICE_ALIASES.get(lang.strip().lower(), "mimo_default")
 
 
+def normalize_lang(lang: str) -> str:
+    if not isinstance(lang, str):
+        return ""
+    return lang.strip().lower()
+
+
+def is_chinese_lang(lang: str) -> bool:
+    return normalize_lang(lang) in CHINESE_LANGS
+
+
+def is_english_lang(lang: str) -> bool:
+    return normalize_lang(lang) in ENGLISH_LANGS
+
+
 def resolve_speed(lang: str, speed: str) -> str:
     # If caller explicitly provides speed, honor it.
     if isinstance(speed, str) and speed.strip():
+        normalized = speed.strip().lower()
+        if is_chinese_lang(lang) and normalized in {"speed up", "speedup", "speed-up"}:
+            return DEFAULT_ZH_SPEED
+        if is_english_lang(lang) and normalized in {DEFAULT_ZH_SPEED}:
+            return DEFAULT_EN_SPEED
         return speed.strip()
-    # For Chinese requests, use the Chinese style tag by default.
-    if isinstance(lang, str) and lang.strip().lower() in {"zh", "chinese", "default_zh", "mimo_zh"}:
-        return "变快"
-    return "Speed up"
+    # Use language-appropriate default style tags when not provided.
+    if is_chinese_lang(lang):
+        return DEFAULT_ZH_SPEED
+    if is_english_lang(lang):
+        return DEFAULT_EN_SPEED
+    return DEFAULT_EN_SPEED
+
+
+def parse_flag(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        return True
+    return True
+
+
+def resolve_model(data: dict) -> str:
+    if "v2" in data and parse_flag(data.get("v2")):
+        return MODEL_V2
+    return MODEL_V2_5
 
 
 async def parse_request_payload(request: Request):
@@ -231,13 +279,14 @@ async def mimo_tts(request: Request):
 
         headers = build_headers()
         
-        # 从请求参数获取语速。未传 speed 时，zh 默认“变快”，其余默认“Speed up”。
+        # 从请求参数获取语速。未传 speed 时，zh 默认“变快”，en 默认“Speed up”。
         lang = extract_lang(data)
         speed = resolve_speed(lang, data.get("speed", ""))
         voice = resolve_voice(lang)
+        model = resolve_model(data)
         
         payload = {
-            "model": "mimo-v2-tts",
+            "model": model,
             # 参考官方文档：待合成文本应位于 assistant 角色消息中。
             "messages": build_messages(text, speed),
             "audio": {"voice": voice, "format": "wav"},
