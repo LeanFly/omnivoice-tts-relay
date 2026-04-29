@@ -98,9 +98,15 @@ def unauthorized_response() -> Response:
     return response
 
 
-def build_messages(text: str, speed: str = "Speed up"):
-    # 根据 MiMo 文档，<style> 标签可以控制语速和风格
-    styled_text = f"<style>{speed}</style>{text}"
+def build_messages(text: str, speed: str, model: str):
+    if not speed:
+        styled_text = text
+    else:
+        if model == MODEL_V2:
+            styled_text = f"<style>{speed}</style>{text}"
+        else:
+            styled_text = f"({speed}){text}"
+
     return [
         {"role": "user", "content": "请自然朗读下面这段文本。"},
         {"role": "assistant", "content": styled_text},
@@ -113,10 +119,24 @@ def build_headers():
     return {"api-key": API_KEY, "Content-Type": "application/json"}
 
 
-def resolve_voice(lang: str) -> str:
-    if not lang:
-        return "mimo_default"
-    return VOICE_ALIASES.get(lang.strip().lower(), "mimo_default")
+def resolve_voice(lang: str, model: str) -> str:
+    lang_key = lang.strip().lower() if lang else ""
+    if model == MODEL_V2:
+        return VOICE_ALIASES.get(lang_key, "mimo_default")
+    else:
+        v2_5_aliases = {
+            "en": "Mia",
+            "english": "Mia",
+            "default_en": "Mia",
+            "mimo_en": "Mia",
+            "zh": "冰糖",
+            "chinese": "冰糖",
+            "default_zh": "冰糖",
+            "mimo_zh": "冰糖",
+            "default": "mimo_default",
+            "mimo_default": "mimo_default",
+        }
+        return v2_5_aliases.get(lang_key, "mimo_default")
 
 
 def normalize_lang(lang: str) -> str:
@@ -166,9 +186,21 @@ def parse_flag(value) -> bool:
 
 
 def resolve_model(data: dict) -> str:
+    # 优先解析 v=2 或 v=2.5
+    v_value = data.get("v")
+    if v_value is not None:
+        v_str = str(v_value).strip()
+        if v_str == "2":
+            return MODEL_V2
+        elif v_str == "2.5":
+            return MODEL_V2_5
+            
+    # 向下兼容旧的 v2 请求方式
     v2_value = data.get("v2")
     if v2_value is not None and parse_flag(v2_value):
         return MODEL_V2
+        
+    # 默认返回 2.5
     return MODEL_V2_5
 
 
@@ -283,13 +315,13 @@ async def mimo_tts(request: Request):
         # 从请求参数获取语速。未传 speed 时，zh 默认“变快”，en 默认“Speed up”。
         lang = extract_lang(data)
         speed = resolve_speed(lang, data.get("speed", ""))
-        voice = resolve_voice(lang)
         model = resolve_model(data)
+        voice = resolve_voice(lang, model)
         
         payload = {
             "model": model,
             # 参考官方文档：待合成文本应位于 assistant 角色消息中。
-            "messages": build_messages(text, speed),
+            "messages": build_messages(text, speed, model),
             "audio": {"voice": voice, "format": "wav"},
         }
 

@@ -17,8 +17,8 @@ payload = {
 print("正在请求中转服务器...")
 
 try:
-    if not USERNAME or not PASSWORD:
-        raise RuntimeError("请先设置 TTS_AUTH_USERNAME 和 TTS_AUTH_PASSWORD 环境变量")
+    # if not USERNAME or not PASSWORD:
+    #     raise RuntimeError("请先设置 TTS_AUTH_USERNAME 和 TTS_AUTH_PASSWORD 环境变量")
 
     session = requests.Session()
 

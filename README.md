@@ -10,7 +10,7 @@ Its main purpose is exactly this: convert MiMo TTS into a Legado-friendly TTS se
 - Calls Xiaomi MiMo speech synthesis (defaults to `mimo-v2.5-tts`).
 - Returns generated WAV audio.
 - Supports language-based built-in voice selection via URL params (`en`, `zh`, or default).
-- Supports opting into `mimo-v2-tts` via the `v2` URL param (for example `&v2=1`).
+- Supports specifying the version via the `v` URL param (`&v=2` or `&v=2.5`). The default is `v=2.5`.
 - Supports optional speed style control via request params.
 - Supports session-based auth endpoints for clients that use a login flow.
 
@@ -64,12 +64,12 @@ If auth is enabled in this relay, use login flow values below.
 
 Language and speed notes:
 
-- lang=zh uses Chinese voice default_zh.
-- lang=en uses English voice default_en.
+- lang=zh uses Chinese voice 冰糖 (MiMo v2.5) or default_zh (MiMo v2).
+- lang=en uses English voice Mia (MiMo v2.5) or default_en (MiMo v2).
 - no lang uses mimo_default.
 - when speed is not provided: zh defaults to 变快, en defaults to Speed up.
 - you can override speed by passing speed in request params.
-- add `v2` (for example `&v2=1`) to use the legacy `mimo-v2-tts` model; otherwise `mimo-v2.5-tts` is used.
+- specify version via `v` (for example `&v=2` or `&v=2.5`); otherwise `mimo-v2.5-tts` is used by default.
 
 ## License
 
