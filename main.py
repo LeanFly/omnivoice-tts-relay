@@ -1,17 +1,38 @@
+import asyncio
 import base64
 import hashlib
 import hmac
+import io
 import json
 import os
 from urllib.parse import parse_qs
 
+import numpy as np
+import soundfile as sf
+import torch
 from fastapi import FastAPI, Request, Response
-import httpx
+from omnivoice import OmniVoice
 
 app = FastAPI()
 
-# 替换为你小米平台的真实 API KEY
-API_KEY = os.getenv("MIMO_API_KEY", "")
+_omni_model = None
+
+
+def _load_model():
+    global _omni_model
+    if _omni_model is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        dtype = torch.float16 if device == "cuda" else torch.float32
+        print(f"Loading OmniVoice on {device}...")
+        _omni_model = OmniVoice.from_pretrained(
+            "k2-fsa/OmniVoice",
+            device_map=device,
+            dtype=dtype,
+        )
+        print("OmniVoice loaded.")
+    return _omni_model
+
+
 AUTH_USERNAME = os.getenv("TTS_AUTH_USERNAME", "")
 AUTH_PASSWORD = os.getenv("TTS_AUTH_PASSWORD", "")
 SESSION_SECRET = os.getenv("TTS_SESSION_SECRET", "")
@@ -28,12 +49,6 @@ VOICE_ALIASES = {
     "default": "mimo_default",
     "mimo_default": "mimo_default",
 }
-MODEL_V2_5 = "mimo-v2.5-tts"
-MODEL_V2 = "mimo-v2-tts"
-DEFAULT_ZH_SPEED = "变快"
-DEFAULT_EN_SPEED = "Speed up"
-CHINESE_LANGS = {"zh", "chinese", "default_zh", "mimo_zh", "zh-cn", "zh-hans", "zh-hant"}
-ENGLISH_LANGS = {"en", "english", "default_en", "mimo_en", "en-us", "en-gb"}
 
 
 def auth_enabled() -> bool:
@@ -98,110 +113,46 @@ def unauthorized_response() -> Response:
     return response
 
 
-def build_messages(text: str, speed: str, model: str):
-    if not speed:
-        styled_text = text
-    else:
-        if model == MODEL_V2:
-            styled_text = f"<style>{speed}</style>{text}"
-        else:
-            styled_text = f"({speed}){text}"
+VOICE_INSTRUCTS = {
+    "default_en": "female, american accent",
+    "mimo_en": "female, american accent",
+    "default_zh": "female",
+    "mimo_zh": "female",
+    "mimo_default": "female",
+}
 
-    return [
-        {"role": "user", "content": "请自然朗读下面这段文本。"},
-        {"role": "assistant", "content": styled_text},
-    ]
-
-
-def build_headers():
-    if not API_KEY:
-        raise RuntimeError("MIMO_API_KEY is not set")
-    return {"api-key": API_KEY, "Content-Type": "application/json"}
+LANG_MAP = {
+    "en": "en", "english": "en", "default_en": "en", "mimo_en": "en",
+    "zh": "zh", "chinese": "zh", "default_zh": "zh", "mimo_zh": "zh",
+}
 
 
-def resolve_voice(lang: str, model: str) -> str:
-    lang_key = lang.strip().lower() if lang else ""
-    if model == MODEL_V2:
-        return VOICE_ALIASES.get(lang_key, "mimo_default")
-    else:
-        v2_5_aliases = {
-            "en": "Mia",
-            "english": "Mia",
-            "default_en": "Mia",
-            "mimo_en": "Mia",
-            "zh": "冰糖",
-            "chinese": "冰糖",
-            "default_zh": "冰糖",
-            "mimo_zh": "冰糖",
-            "default": "mimo_default",
-            "mimo_default": "mimo_default",
-        }
-        return v2_5_aliases.get(lang_key, "mimo_default")
+def resolve_instruct(lang: str) -> str:
+    voice = resolve_voice(lang)
+    return VOICE_INSTRUCTS.get(voice, "female")
 
 
-def normalize_lang(lang: str) -> str:
-    if not isinstance(lang, str):
-        return ""
-    return lang.strip().lower()
+def resolve_language(lang: str) -> str | None:
+    if not lang:
+        return None
+    return LANG_MAP.get(lang.strip().lower())
 
 
-def is_chinese_lang(lang: str) -> bool:
-    return normalize_lang(lang) in CHINESE_LANGS
+def resolve_voice(lang: str) -> str:
+    if not lang:
+        return "mimo_default"
+    return VOICE_ALIASES.get(lang.strip().lower(), "mimo_default")
 
 
-def is_english_lang(lang: str) -> bool:
-    return normalize_lang(lang) in ENGLISH_LANGS
-
-
-def resolve_speed(lang: str, speed: str) -> str:
-    # If caller explicitly provides speed, honor it.
+def resolve_speed(lang: str, speed: str) -> float:
     if isinstance(speed, str) and speed.strip():
-        normalized = speed.strip().lower()
-        if is_chinese_lang(lang) and normalized in {"speed up", "speedup", "speed-up"}:
-            return DEFAULT_ZH_SPEED
-        if is_english_lang(lang) and normalized in {DEFAULT_ZH_SPEED, DEFAULT_ZH_SPEED.lower()}:
-            return DEFAULT_EN_SPEED
-        return speed.strip()
-    # Use language-appropriate default style tags when not provided.
-    if is_chinese_lang(lang):
-        return DEFAULT_ZH_SPEED
-    if is_english_lang(lang):
-        return DEFAULT_EN_SPEED
-    return DEFAULT_EN_SPEED
-
-
-def parse_flag(value) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"0", "false", "no", "off"}:
-            return False
-        return True
-    return True
-
-
-def resolve_model(data: dict) -> str:
-    # 优先解析 v=2 或 v=2.5
-    v_value = data.get("v")
-    if v_value is not None:
-        v_str = str(v_value).strip()
-        if v_str == "2":
-            return MODEL_V2
-        elif v_str == "2.5":
-            return MODEL_V2_5
-            
-    # 向下兼容旧的 v2 请求方式
-    v2_value = data.get("v2")
-    if v2_value is not None and parse_flag(v2_value):
-        return MODEL_V2
-        
-    # 默认返回 2.5
-    return MODEL_V2_5
+        try:
+            return float(speed)
+        except ValueError:
+            pass
+    if isinstance(lang, str) and lang.strip().lower() in {"zh", "chinese", "default_zh", "mimo_zh"}:
+        return 1.05
+    return 1.0
 
 
 async def parse_request_payload(request: Request):
@@ -297,62 +248,37 @@ async def auth_logout():
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
     return response
 
+
 @app.api_route("/tts", methods=["GET", "POST"])
 async def mimo_tts(request: Request):
     try:
-        if not is_authorized(request):
-            return unauthorized_response()
+        # if not is_authorized(request):
+        #     return unauthorized_response()
 
-        # 接收 Legado 传来的 JSON（也兼容纯文本和 query 参数）
         data = await parse_request_payload(request)
         text = data.get("text", "")
-        
+
         if not text:
             return Response(status_code=400, content="No text provided")
 
-        headers = build_headers()
-        
-        # 从请求参数获取语速。未传 speed 时，zh 默认“变快”，en 默认“Speed up”。
         lang = extract_lang(data)
-        speed = resolve_speed(lang, data.get("speed", ""))
-        model = resolve_model(data)
-        voice = resolve_voice(lang, model)
-        
-        payload = {
-            "model": model,
-            # 参考官方文档：待合成文本应位于 assistant 角色消息中。
-            "messages": build_messages(text, speed, model),
-            "audio": {"voice": voice, "format": "wav"},
-        }
+        speed_val = resolve_speed(lang, data.get("speed", ""))
+        instruct = resolve_instruct(lang)
+        language = resolve_language(lang)
 
-        # 异步调用小米接口，设置 30 秒超时
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://api.xiaomimimo.com/v1/chat/completions", 
-                headers=headers, 
-                json=payload, 
-                timeout=45.0
-            )
-            resp.raise_for_status()
-            res_json = resp.json()
+        omni_model = await asyncio.to_thread(_load_model)
+        audios = await asyncio.to_thread(
+            omni_model.generate,
+            text=text, language=language,
+            instruct=instruct, speed=speed_val,
+        )
 
-            # 提取并解码 Base64 音频数据
-            choice = (res_json.get("choices") or [{}])[0]
-            message = choice.get("message") or {}
-            audio = message.get("audio") or {}
-            b64_audio = audio.get("data")
+        buf = io.BytesIO()
+        sf.write(buf, audios[0], omni_model.sampling_rate, format="wav")
+        wav_bytes = buf.getvalue()
 
-            if not b64_audio:
-                return Response(
-                    status_code=502,
-                    content=f"MiMo response has no audio data: {res_json}",
-                )
+        return Response(content=wav_bytes, media_type="audio/wav")
 
-            audio_bytes = base64.b64decode(b64_audio)
-
-            # 返回纯净的 WAV 流（与官方示例一致）
-            return Response(content=audio_bytes, media_type="audio/wav")
-            
     except Exception as e:
         print(f"Error: {e}")
         return Response(status_code=500, content=str(e))
