@@ -1,3 +1,5 @@
+>基于 mimo-tts-server(https://github.com/xiangyuw1/mimo-tts-relay) 修改
+
 # OmniVoice TTS Relay Server
 
 基于小米 OmniVoice 的本地 TTS 中转服务，兼容 Legado 阅读 APP 的 TTS 接口。
