@@ -256,6 +256,8 @@ If auth is enabled in this relay, use login flow values below.
 - header:
 	Leave empty when using login cookie session.
 
+
+<del>
 Language and speed notes:
 
 - lang=zh uses Chinese voice 冰糖 (MiMo v2.5) or default_zh (MiMo v2).
@@ -264,7 +266,7 @@ Language and speed notes:
 - when speed is not provided: zh defaults to 变快, en defaults to Speed up.
 - you can override speed by passing speed in request params.
 - specify version via `v` (for example `&v=2` or `&v=2.5`); otherwise `mimo-v2.5-tts` is used by default.
-
+</del>
 ## License
 
 MIT
