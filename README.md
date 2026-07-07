@@ -1,4 +1,4 @@
->基于 mimo-tts-server(https://github.com/xiangyuw1/mimo-tts-relay) 修改
+>基于 mimo-tts-relay(https://github.com/xiangyuw1/mimo-tts-relay) 修改
 
 # OmniVoice TTS Relay Server
 
